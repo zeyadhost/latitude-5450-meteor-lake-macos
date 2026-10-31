@@ -8,6 +8,14 @@ run), **REPLACE** (wrong hardware, must change), **CHECK** (may work, needs veri
 > **Hardware inventory source:** `acpi/device-paths.txt` and the Windows PnP dump from this
 > session. A Linux live-USB report is still needed for firmware versions and display wiring.
 
+## Progress
+
+| Item | Status | Details |
+|---|---|---|
+| R6 Panel EDID | **Done.** 5450 header written; the original and 5450 tests compile and pass | [panel-edid.md](panel-edid.md) |
+| B8 / R7 CPU table (APIC) | **Done.** Generated from this laptop's firmware; byte-identical to the 5350's table. The Delete rule must change to `TableLength 0` | [apic.md](apic.md) |
+| R1 Audio | **Shortlist ready:** test layouts 69, 68, 11, 3, 54 in that order | [audio-alc236.md](audio-alc236.md) |
+
 ---
 
 ## BLOCK — code that checks for the 5350 and refuses the 5450
@@ -36,8 +44,8 @@ These stop the port dead. Fix them first.
 | R3 | **Bluetooth** | Intel `8087:0033` (CNVi companion) | Intel `8087:0A2B` (AC 8260 companion) | `desktop-sources/publish-peripherals.py:23`, `desktop-sources/prepare-peripherals.py:55`, `tahoe-port/Sources/Native-Bluetooth-source/NativeLEHandshake.hpp:1`, `latitude-desktop/BUILD-MANIFEST.json:1465`, 4 VALIDATION.json files | Use the standard IntelBluetoothFirmware — `0A2B` is supported out of the box. Remove or update any hardcoded USB ID checks. |
 | R4 | **Touchpad** | ELAN `04F3:328E` on I2C3 (`_SB.PC00.I2C3.TPD0`) | Cirque `VEN_0488` on I2C3 (`_SB.PC00.I2C3.TPD0`) | `desktop-sources/test-hid-readguard.py:33` (`wProductID=0x328e`), `gpio-sources/HID-before-irq-required.cpp:602`, `tablet-sources/` (5+ files), `tahoe-port/Sources/Touchpad-experimental/` (3+ files), `touchpad-sources/` (all files), `latitude-desktop/BUILD-MANIFEST.json:1040,1469` | Same I2C bus and ACPI device (`TPD0`), different HID product. Change every `0x328e`/`ELAN04F3` check. The SSDT-LAT-TPD0 fix for `_DSM`/`_CRS` (XDSM/XCRS rename) **should still apply** since our DSDT has the same `HIDG` scoping bug. But: (a) verify the Cirque's HID descriptor, (b) the `LatitudeI2CMeteorLake` kext's I2C timing may need changes, (c) VoodooI2CHID needs to recognise the Cirque. |
 | R5 | **Touchscreen** | Wacom (3 SSDTs: SSDT-WACOM-DIRECT/GPIO/RES) on I2C0 (`_SB.PC00.I2C0.TPL0`) | ELAN `ELAN900C` on I2C0 (`_SB.PC00.I2C0.TPL0`) | All config.plist ACPI→Add entries, `latitude-desktop/BUILD-MANIFEST.json:623-625`, 15+ VALIDATION.json files | Remove the 3 SSDT-WACOM-*.aml from ACPI→Add. The ELAN touchscreen should work with VoodooI2CHID without custom SSDTs (it's a standard I2C-HID device). DeviceProperties at `PciRoot(0x0)/Pci(0x15,0x0)` has Wacom-specific entries (`LatitudeWacomResourceFallback`, `wacom-polling-wifi-init-test2`) — remove them. Keep `force-polling` if GPIO interrupts don't work on the ELAN. |
-| R6 | **Panel EDID and timing** | BOE 13.3" 1920×1080, pixel clock 147,750 kHz | AUO `243D` 14" 1920×1080, pixel clock 141,000 kHz | `desktop-sources/latitude_panel_edid.h:4` (hardcoded BOE EDID bytes), `MyIntelGPU/ports/latitude5350/hardware-profile.json:30` | Replace the EDID in `latitude_panel_edid.h` with the AUO panel's EDID (extract from our Windows registry or Linux). The framebuffer driver uses this for mode setup. **This is critical** — wrong EDID = wrong timing = black screen or damaged panel (unlikely but possible). |
-| R7 | **Custom APIC table** | `APIC-Latitude5350.aml`, 604 bytes | Must match 5450's CPU topology | See B8 above | The 5450's APIC is 856 bytes (14 cores vs the 5350's count). Build a new P-core-first APIC from our dump, and update the ACPI→Delete TableLength. |
+| R6 | **Panel EDID** | BOE 13.3" 1920×1080, pixel clock 147,750 kHz | AUO `243D` (B140HAK) 14" 1920×1080, pixel clock 141,000 kHz | `desktop-sources/latitude_panel_edid.h:4` (hardcoded BOE EDID bytes), `MyIntelGPU/ports/latitude5350/hardware-profile.json:30` | **Done:** `desktop-sources/latitude_panel_edid_5450.h` (see [panel-edid.md](panel-edid.md)). The framebuffer takes timing from the GPU's pipe registers; the EDID only gives macOS the panel's size and identity. |
+| R7 | **Custom APIC table** | `APIC-Latitude5350.aml`, 604 bytes | Same 14 CPUs and APIC IDs; the 5450 firmware uses x2APIC entries (856 bytes) | See B8 above | **Done:** `docs/port-5450/acpi/APIC-Latitude5450.aml`, byte-identical to the 5350's table. Set the ACPI→Delete rule to `TableLength 0` (see [apic.md](apic.md)). |
 | R8 | **USB map** | `UTBMap.kext` (no executable, just a plist mapping 5350's ports) | 5450's USB ports differ | `touchpad-candidate/`, config.plist Kernel→Add | Generate a new USB map with USBToolBox on the 5450. The tool runs from Windows. |
 | R9 | **Keyboard ACPI ID** | `DLLK0CB6` (in the 5350's DSDT, PS2 keyboard) | `DLLK0CB2` (in our DSDT) | VoodooPS2Controller matches by ACPI, should handle any DLLK* | **Check only** — VoodooPS2 should match generically. Verify the Copilot key scancode is the same. |
 
